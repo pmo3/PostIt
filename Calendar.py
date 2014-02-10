@@ -3,11 +3,12 @@ import datetime
 import sys
 
 class Day(QtGui.QWidget):
-	def __init__(self, day):
+	def __init__(self, day, parent):
 		''' day is int[0,4], where 0 is today,
 		1 is next day, etc'''
 		super(Day, self).__init__()
 		self.day = day
+		self.parent = parent
 		self.events = []
 		self.WIDTH = 150
 		self.HEIGHT = 150
@@ -15,35 +16,44 @@ class Day(QtGui.QWidget):
 		self.initUI()
 
 	def initUI(self):
+		
+		# manage widgets
 		self.setMinimumSize(self.WIDTH, self.HEIGHT)
 		self.setStyleSheet('QWidget { font-size: 8pt }')
-		self.dateLayout = QtGui.QHBoxLayout()
-		self.mainLayout = QtGui.QVBoxLayout()
-		self.connect(self, QtCore.SIGNAL('clicked()'), self.focus)
+		self.setParent(self.parent)
+
+		self.todayLabel = QtGui.QLabel(self)
+		self.dateLabel = QtGui.QLabel(self)
 
 		if self.day == 0:
-			self.todayLabel = QtGui.QLabel(self)
 			self.todayLabel.setText('Today')
+			self.dateLabel.setText(self.formatDate(self.day))
 		else:
-			self.todayLabel = QtGui.QLabel(self)
 			self.todayLabel.setText('')
+			self.dateLabel.setText('')
 
-		self.dateLayout.addWidget(self.todayLabel)
-		self.dateLayout.addStretch(1)
-
-
-		self.dateLabel = QtGui.QLabel(self)
-		self.dateLabel.setText(self.formatDate(self.day))
-		self.dateLayout.addWidget(self.dateLabel)
+		self.menuLabel = ClickableQLabel(self)
+		self.menuLabel.setPixmap(QtGui.QPixmap('media\menu.png'))
 
 		self.deleteLabel = ClickableQLabel(self)
 		self.deleteLabel.setText('Delete')
-		self.connect(self.deleteLabel, QtCore.SIGNAL('clicked()'), self.deleteEvent)
-
 		self.addLabel = ClickableQLabel(self)
 		self.addLabel.setText('Add')
+
+		#manage signal/slot connections
+		self.connect(self, QtCore.SIGNAL('clicked()'), self.focus)
+		self.connect(self, QtCore.SIGNAL('doubleClicked()'), self.addEvent)
+		self.connect(self.menuLabel, QtCore.SIGNAL('clicked()'), self.setupContextMenu)
+		self.connect(self.deleteLabel, QtCore.SIGNAL('clicked()'), self.deleteEvent)
 		self.connect(self.addLabel, QtCore.SIGNAL('clicked()'), self.addEvent)
 
+		# manage layouts
+		self.dateLayout = QtGui.QHBoxLayout()
+		self.dateLayout.addWidget(self.todayLabel)
+		self.dateLayout.addStretch(1)	
+		self.dateLayout.addWidget(self.menuLabel)
+		self.dateLayout.addStretch(1)
+		self.dateLayout.addWidget(self.dateLabel)
 
 		self.eventLayout = QtGui.QVBoxLayout()
 		for item in self.events:
@@ -55,13 +65,23 @@ class Day(QtGui.QWidget):
 		self.editLayout.addStretch(1)
 		self.editLayout.addWidget(self.addLabel)
 
+		self.mainLayout = QtGui.QVBoxLayout()
 		self.mainLayout.addLayout(self.dateLayout)
 		self.mainLayout.addLayout(self.eventLayout)
 		self.mainLayout.addStretch(1)
 		self.mainLayout.addLayout(self.editLayout)
 
 		self.setLayout(self.mainLayout)
+		self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
+		self.resize(150, 150)
 		self.show()
+
+		#initialize actions and shortcuts
+		self.createActions()
+		QtGui.QShortcut(QtGui.QKeySequence('Ctrl+N'), self, self.openNewNote)
+		QtGui.QShortcut(QtGui.QKeySequence('Ctrl+A'), self, self.addEvent)
+		QtGui.QShortcut(QtGui.QKeySequence('Ctrl+W'), self, self.parent.close)
+
 
 	def paintEvent(self, e):
 		qp = QtGui.QPainter()
@@ -80,6 +100,7 @@ class Day(QtGui.QWidget):
 
 	def addEvent(self):
 		self.addWindow = AddMenuPopUp(self)
+		#grab screen location for popup placement
 		point = self.rect().center()
 		globalPoint = self.mapToGlobal(point)
 		self.addWindow.move(globalPoint)
@@ -92,12 +113,11 @@ class Day(QtGui.QWidget):
 			item = layout.itemAt(i)
 			layout.removeItem(item)
 
-
 	def displayEvents(self):
 		self.clearLayout(self.eventLayout)
 		for item in self.events:
 			self.eventLayout.addWidget(item.getLabel())
-	
+
 	def deleteEvent(self):
 		if len(self.events) == 0:
 			self.warning = QtGui.QMessageBox.information(self, 'Warning', 'There are no events to delete', QtGui.QMessageBox.Close)
@@ -106,81 +126,40 @@ class Day(QtGui.QWidget):
 			return
 		self.selected.delete()
 
-	def focusInEvent(self, event):
-		self.selected = None
+	def focus(self):
+		self.setFocus(True)
 
+	def createActions(self):
+		self.exitAction = QtGui.QAction('&Exit', self.menuLabel, triggered=sys.exit)
+		self.closeAction = QtGui.QAction('&Close this note', self.menuLabel, triggered=self.parent.close)
+		self.newNoteAction = QtGui.QAction('&New note', self.menuLabel, triggered=self.openNewNote)
+		self.addEventAction = QtGui.QAction('&Add event', self.menuLabel, triggered=self.addEvent)
+		actionsList = [self.exitAction, self.closeAction, self.newNoteAction, self.addEventAction]
+		return actionsList
+
+	def setupContextMenu(self):
+		menu = QtGui.QMenu()
+		point = self.menuLabel.rect().topLeft()
+		
+		# add actions
+		for action in self.createActions():
+			menu.addAction(action)
+		menu.exec_(self.menuLabel.mapToGlobal(point))
+
+	def openNewNote(self):
+		self.new = SingleDayDisplay(None)
+		self.new.resize(150, 150)
+		self.new.show()
+
+	#emit mouse event signals
 	def mouseReleaseEvent(self, event):
 		if event.button() == QtCore.Qt.LeftButton:
 			self.emit(QtCore.SIGNAL('clicked()'))
 
-	def focus(self):
-		self.setFocus(True)
+	def mouseDoubleClickEvent(self, event):
+		if event.button() == QtCore.Qt.LeftButton:
+			self.emit(QtCore.SIGNAL('doubleClicked()'))
 
-class MainWindow(QtGui.QMainWindow):
-	def __init__(self):
-		super(MainWindow, self).__init__()
-		self.numberOfDays = 0
-		self.initUI()
-
-	def initUI(self):
-		#to do: how to properly load these images from media directory
-		exitAction = QtGui.QAction(QtGui.QIcon('exit.png'), '&Exit', self)
-		exitAction.setShortcut('Ctrl+Q')
-		exitAction.setStatusTip('Exit Application')
-		exitAction.triggered.connect(QtGui.qApp.quit)
-
-		self.menubar = self.menuBar()
-		self.fileMenu = self.menubar.addMenu('&File')
-		self.fileMenu.addAction(exitAction)
-		#self.menubar.hide()
-
-
-		# currently only supports display of one day
-		day1 = Day(0)
-		self.numberOfDays += 1
-		# day2 = Day(1)
-		# self.numberOfDays += 1
-		# day3 = Day(2)
-		# self.numberOfDays += 1
-		# day4 = Day(3)
-		# self.numberOfDays += 1
-		# day5 = Day(4)
-		# self.numberOfDays += 1
-
-		cwidget = QtGui.QWidget(self)
-		self.setCentralWidget(cwidget)
-		cwidget.setWindowOpacity(0.1)
-
-		self.expandLabel = QtGui.QLabel(self)
-		self.expandLabel.setText('Show Less')
-		self.setStyleSheet('QWidget {font-size: 8pt }')
-		#self.expandLabel.hide()
-
-		# layout management
-		layout = QtGui.QVBoxLayout()
-		cwidget.setLayout(layout)
-		layout.setSpacing(0)
-		layout.addWidget(day1)
-		layout.addWidget(self.expandLabel)
-		# layout.addWidget(day2)
-		# layout.addWidget(day3)
-		# layout.addWidget(day4)
-		# layout.addWidget(day5)
-
-
-
-
-		self.setGeometry(0,40,150,150)
-		self.setWindowTitle('To Do')
-		self.setWindowIcon(QtGui.QIcon('calendaricon.png'))
-		#self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
-		day1.setMouseTracking(True)
-
-		self.show()
-
-	# def mouseMoveEvent(self, event):
-	# 	self.menubar.show()
-	# 	self.expandLabel.show()
 
 
 # extend label class to overwrite certain events
@@ -249,6 +228,7 @@ class Event(QtGui.QWidget):
 		self.eventLabel.setText(text)
 		self.eventLabel.setToolTip('Double click to edit')
 		self.eventLabel.setWordWrap(True)
+
 		# connect signals and slots for events
 		self.connect(self.eventLabel, QtCore.SIGNAL('doubleClicked()'), self.beginEditAct)
 		self.connect(self.eventLabel, QtCore.SIGNAL('clicked()'), self.setFocus)
@@ -309,18 +289,22 @@ class Event(QtGui.QWidget):
 		menu.exec_(self.eventLabel.mapToGlobal(point))
 
 	def setPriorityHigh(self):
+		self.priority = 'High'
 		self.col = Event.RED
 		self.eventLabel.setStyleSheet("QWidget { background-color: % s }" % self.col.name())
 
 	def setPriorityMed(self):
+		self.priority = 'Medium'
 		self.col = Event.ORANGE
 		self.eventLabel.setStyleSheet("QWidget { background-color: % s }" % self.col.name())	
 
 	def setPriorityLow(self):
+		self.priority = 'Low'
 		self.col = Event.GREEN
 		self.eventLabel.setStyleSheet("QWidget { background-color: % s }" % self.col.name())
 
 	def setPriorityNone(self):
+		self.priority = None
 		self.col = Event.KHAKI
 		self.eventLabel.setStyleSheet("QWidget { background-color: % s }" % self.col.name())
 
@@ -333,14 +317,16 @@ class Event(QtGui.QWidget):
 		self.eventLabel.setFocus(True)
 
 	def outlineLabel(self):
-			self.eventLabel.setStyleSheet("QWidget { border-style: dotted; border-width: 2px }")
+			self.eventLabel.setStyleSheet("QWidget { border-style: dotted; border-width: 2px; background-color: %s }" % self.col.name())
 			self.selected = True
 			self.day.selected = self
+
 
 	def deleteOutline(self):
 		self.eventLabel.setStyleSheet("QWidget { border-width: 0px }")
 		self.selected = False
 		self.day.selected = None
+		self.setPriority()
 
 class AddMenuPopUp(QtGui.QDialog):
 	def __init__(self, day):
@@ -413,10 +399,59 @@ class AddMenuPopUp(QtGui.QDialog):
 		self.accept()
 
 
+class SingleDayDisplay(QtGui.QWidget):
+	def __init__(self, day):
+		super(SingleDayDisplay, self).__init__()
+		self.day = day
+		self.initUI()
+
+	def initUI(self):
+		self.day1 = Day(self.day, self)
+		
+		#manage layout
+		self.layout = QtGui.QVBoxLayout()
+		self.layout.setSpacing(0)
+		self.layout.addWidget(self.day1)
+		self.setLayout(self.layout)
+		self.layout.setContentsMargins(0,0,0,0)
+
+		self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
+		self.resize(150, 150)
+		self.show()
+
+	def mousePressEvent(self, event):
+		self.__mousePressPos = None
+		self.__mouseMovePos = None
+		if event.button() == QtCore.Qt.LeftButton:
+			self.__mousePressPos = event.globalPos()
+			self.__mouseMovePos = event.globalPos()
+
+	def mouseMoveEvent(self, event):
+		if event.buttons() == QtCore.Qt.LeftButton:
+			#adjust offset from clicked point to origin of widget
+			currPos = self.mapToGlobal(self.pos())
+			globalPos = event.globalPos()
+			diff = globalPos - self.__mouseMovePos
+			newPos = self.mapFromGlobal(currPos + diff)
+			self.move(newPos)
+
+			self.__mouseMovePos = globalPos
+
+	def mouseReleaseEvent(self, event):
+		if event.button() == QtCore.Qt.LeftButton:
+			self.emit(QtCore.SIGNAL('clicked()'))
+		if self.__mousePressPos is not None:
+			moved = event.globalPos() - self.__mousePressPos
+			if moved.manhattanLength() > 3:
+				event.ignore()
+				return
+
+	def close(self):
+		self.hide()
 
 def main():
 	app = QtGui.QApplication(sys.argv)
-	ex = MainWindow()
+	ex = SingleDayDisplay(0)
 	sys.exit(app.exec_())
 
 if __name__ == '__main__':
