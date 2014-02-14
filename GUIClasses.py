@@ -1,26 +1,36 @@
 from PyQt4 import QtGui, QtCore
 import datetime
 import sys
+import json
+import JSONfunctions
+
+#define constants
+SIZE = 150
+DaysOnDisplay = []
+DaysOnDisplayJSON = []
+
 
 class Day(QtGui.QWidget):
-	def __init__(self, day, parent):
+	def __init__(self, day, position=[50, 50]):
 		''' day is int[0,4], where 0 is today,
 		1 is next day, etc'''
 		super(Day, self).__init__()
 		self.day = day
-		self.parent = parent
+		self.position = QtCore.QPoint(position[0], position[1])
+		self.date = datetime.date.today()
+		self.parent = None
 		self.events = []
-		self.WIDTH = 150
-		self.HEIGHT = 150
+		self.WIDTH = SIZE
+		self.HEIGHT = SIZE
 		self.selected = None
+		self.background = Event.KHAKI
 		self.initUI()
 
 	def initUI(self):
-		
+		global DaysOnDisplay
 		# manage widgets
 		self.setMinimumSize(self.WIDTH, self.HEIGHT)
 		self.setStyleSheet('QWidget { font-size: 8pt }')
-		self.setParent(self.parent)
 
 		self.todayLabel = QtGui.QLabel(self)
 		self.dateLabel = QtGui.QLabel(self)
@@ -36,7 +46,7 @@ class Day(QtGui.QWidget):
 		self.menuLabel.setPixmap(QtGui.QPixmap('media\menu.png'))
 
 		self.deleteLabel = ClickableQLabel(self)
-		self.deleteLabel.setText('Delete')
+		self.deleteLabel.setText('Delete Event')
 		self.addLabel = ClickableQLabel(self)
 		self.addLabel.setText('Add')
 
@@ -73,24 +83,32 @@ class Day(QtGui.QWidget):
 
 		self.setLayout(self.mainLayout)
 		self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
-		self.resize(150, 150)
+		self.resize(self.WIDTH, self.HEIGHT)
+		self.move(self.position)
 		self.show()
 
 		#initialize actions and shortcuts
 		self.createActions()
 		QtGui.QShortcut(QtGui.QKeySequence('Ctrl+N'), self, self.openNewNote)
 		QtGui.QShortcut(QtGui.QKeySequence('Ctrl+A'), self, self.addEvent)
-		QtGui.QShortcut(QtGui.QKeySequence('Ctrl+W'), self, self.parent.close)
+		QtGui.QShortcut(QtGui.QKeySequence('Ctrl+W'), self, self.delete)
+		QtGui.QShortcut(QtGui.QKeySequence('F1'), self, self.changeColor)
+		QtGui.QShortcut(QtGui.QKeySequence('Ctrl+Q'), self, self.exitApp)
+
+		DaysOnDisplay.append(self)
+		DaysOnDisplayJSON.append(JSONfunctions.convert_day_to_dict(self))
+		JSONfunctions.save(DaysOnDisplayJSON, SIZE)
+
 
 
 	def paintEvent(self, e):
 		qp = QtGui.QPainter()
 		qp.begin(self)
-		self.draw(qp)
+		self.draw(qp, self.background)
 		qp.end()
 
-	def draw(self, qp):
-		qp.setBrush(QtGui.QColor(240,230,140)) #khaki
+	def draw(self, qp, color):
+		qp.setBrush(color) #khaki
 		qp.drawRect(0, 0, self.WIDTH, self.HEIGHT)
 
 
@@ -130,11 +148,12 @@ class Day(QtGui.QWidget):
 		self.setFocus(True)
 
 	def createActions(self):
-		self.exitAction = QtGui.QAction('&Exit', self.menuLabel, triggered=sys.exit)
-		self.closeAction = QtGui.QAction('&Close this note', self.menuLabel, triggered=self.parent.close)
+		self.exitAction = QtGui.QAction('&Exit', self.menuLabel, triggered=self.exitApp)
+		self.closeAction = QtGui.QAction('&Delete this note', self.menuLabel, triggered=self.delete)
 		self.newNoteAction = QtGui.QAction('&New note', self.menuLabel, triggered=self.openNewNote)
 		self.addEventAction = QtGui.QAction('&Add event', self.menuLabel, triggered=self.addEvent)
-		actionsList = [self.exitAction, self.closeAction, self.newNoteAction, self.addEventAction]
+		self.changeColorAction = QtGui.QAction('&Change Background Color', self.menuLabel, triggered=self.changeColor)
+		actionsList = [self.exitAction, self.closeAction, self.newNoteAction, self.addEventAction, self.changeColorAction]
 		return actionsList
 
 	def setupContextMenu(self):
@@ -147,19 +166,80 @@ class Day(QtGui.QWidget):
 		menu.exec_(self.menuLabel.mapToGlobal(point))
 
 	def openNewNote(self):
-		self.new = SingleDayDisplay(None)
-		self.new.resize(150, 150)
+		self.new = Day(0)
+		self.new.resize(self.WIDTH, self.HEIGHT)
 		self.new.show()
+
+
+	def changeColor(self):
+		col = QtGui.QColorDialog.getColor()
+		if col.isValid():
+			self.background = col
+			self.repaint()
+			for event in self.events:
+				event.eventLabel.setStyleSheet("QWidget { background-color: % s }" % col.name())
+
 
 	#emit mouse event signals
 	def mouseReleaseEvent(self, event):
 		if event.button() == QtCore.Qt.LeftButton:
 			self.emit(QtCore.SIGNAL('clicked()'))
+		if self.__mousePressPos is not None:
+			moved = event.globalPos() - self.__mousePressPos
+			self.position = QtGui.QCursor.pos()
+			JSONfunctions.update_pos(self, self.position, DaysOnDisplay, DaysOnDisplayJSON)
+			JSONfunctions.save(DaysOnDisplayJSON, SIZE)
+			if moved.manhattanLength() > 3:
+				event.ignore()
+				return
+		
 
 	def mouseDoubleClickEvent(self, event):
 		if event.button() == QtCore.Qt.LeftButton:
 			self.emit(QtCore.SIGNAL('doubleClicked()'))
 
+	def mousePressEvent(self, event):
+		self.__mousePressPos = None
+		self.__mouseMovePos = None
+		if event.button() == QtCore.Qt.LeftButton:
+			self.__mousePressPos = event.globalPos()
+			self.__mouseMovePos = event.globalPos()
+
+	def mouseMoveEvent(self, event):
+		if event.buttons() == QtCore.Qt.LeftButton:
+			#adjust offset from clicked point to origin of widget
+			currPos = self.mapToGlobal(self.pos())
+			globalPos = event.globalPos()
+			diff = globalPos - self.__mouseMovePos
+			newPos = self.mapFromGlobal(currPos + diff)
+			self.move(newPos)
+
+			self.__mouseMovePos = globalPos
+
+	def delete(self):
+		if len(DaysOnDisplay) == 1:
+			index = DaysOnDisplay.index(self)
+			del DaysOnDisplayJSON[index]
+			del DaysOnDisplay[index]
+			self.hide()
+			self.deleteLater()
+			JSONfunctions.save(DaysOnDisplayJSON, SIZE)
+			self.exitApp()
+		else:
+			index = DaysOnDisplay.index(self)
+			del DaysOnDisplayJSON[index]
+			del DaysOnDisplay[index]
+			self.hide()
+			self.deleteLater()
+			JSONfunctions.save(DaysOnDisplayJSON, SIZE)
+			
+
+	def exitApp(self):
+		JSONfunctions.save(DaysOnDisplayJSON, SIZE)
+		sys.exit()
+
+	def __repr__(self):
+		return '<Day(%s)>' % self.day
 
 
 # extend label class to overwrite certain events
@@ -265,6 +345,9 @@ class Event(QtGui.QWidget):
 		self.day.events[index] = self
 		self.createActions()
 		self.day.displayEvents()
+		JSONfunctions.convert_all_events(self.day, DaysOnDisplay, DaysOnDisplayJSON)
+		JSONfunctions.save(DaysOnDisplayJSON, SIZE)
+
 
 	def createActions(self):
 		self.eventLabel.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
@@ -292,26 +375,36 @@ class Event(QtGui.QWidget):
 		self.priority = 'High'
 		self.col = Event.RED
 		self.eventLabel.setStyleSheet("QWidget { background-color: % s }" % self.col.name())
+		JSONfunctions.convert_all_events(self.day, DaysOnDisplay, DaysOnDisplayJSON)
+		JSONfunctions.save(DaysOnDisplayJSON, SIZE)
 
 	def setPriorityMed(self):
 		self.priority = 'Medium'
 		self.col = Event.ORANGE
 		self.eventLabel.setStyleSheet("QWidget { background-color: % s }" % self.col.name())	
+		JSONfunctions.convert_all_events(self.day, DaysOnDisplay, DaysOnDisplayJSON)
+		JSONfunctions.save(DaysOnDisplayJSON, SIZE)
 
 	def setPriorityLow(self):
 		self.priority = 'Low'
 		self.col = Event.GREEN
 		self.eventLabel.setStyleSheet("QWidget { background-color: % s }" % self.col.name())
+		JSONfunctions.convert_all_events(self.day, DaysOnDisplay, DaysOnDisplayJSON)
+		JSONfunctions.save(DaysOnDisplayJSON, SIZE)
 
 	def setPriorityNone(self):
 		self.priority = None
 		self.col = Event.KHAKI
 		self.eventLabel.setStyleSheet("QWidget { background-color: % s }" % self.col.name())
+		JSONfunctions.convert_all_events(self.day, DaysOnDisplay, DaysOnDisplayJSON)
+		JSONfunctions.save(DaysOnDisplayJSON, SIZE)
 
 	def delete(self):
 		self.eventLabel.deleteLater()
 		self.day.events.remove(self)
 		self.day.displayEvents()
+		JSONfunctions.convert_all_events(self.day, DaysOnDisplay, DaysOnDisplayJSON)
+		JSONfunctions.save(DaysOnDisplayJSON, SIZE)
 
 	def focus(self):
 		self.eventLabel.setFocus(True)
@@ -335,14 +428,6 @@ class AddMenuPopUp(QtGui.QDialog):
 		self.initUI()
 
 	def initUI(self):
-		self.timeCheckbox = QtGui.QCheckBox('Include Time?', self)
-
-		self.timeEdit = QtGui.QTimeEdit(self)
-
-		self.timeLayout = QtGui.QHBoxLayout()
-		self.timeLayout.setSpacing(15)
-		self.timeLayout.addWidget(self.timeCheckbox)
-		self.timeLayout.addWidget(self.timeEdit)
 		
 		self.enterLabel = QtGui.QLabel(self)
 		self.enterLabel.setText('Enter Description')
@@ -372,7 +457,6 @@ class AddMenuPopUp(QtGui.QDialog):
 
 		self.mainLayout = QtGui.QVBoxLayout()
 		self.setLayout(self.mainLayout)
-		self.mainLayout.addLayout(self.timeLayout)
 		self.mainLayout.addLayout(self.enterLayout)
 		self.mainLayout.addWidget(self.prioritySelector)
 		self.mainLayout.addLayout(self.buttonLayout)
@@ -387,8 +471,6 @@ class AddMenuPopUp(QtGui.QDialog):
 		if description == '':
 			self.warning = QtGui.QMessageBox.information(self, 'Warning', 'You must enter a description', QtGui.QMessageBox.Close)
 			return
-		if self.timeCheckbox.checkState() == 2:
-			time = self.timeEdit.text()
 		else:
 			time = None
 		
@@ -396,63 +478,26 @@ class AddMenuPopUp(QtGui.QDialog):
 		newEvent = Event(self.day, description, time, priority)
 		self.day.events.append(newEvent)
 		self.day.displayEvents()
+		JSONfunctions.convert_all_events(self.day, DaysOnDisplay, DaysOnDisplayJSON)
+		JSONfunctions.save(DaysOnDisplayJSON, SIZE)	
 		self.accept()
 
 
-class SingleDayDisplay(QtGui.QWidget):
-	def __init__(self, day):
-		super(SingleDayDisplay, self).__init__()
-		self.day = day
-		self.initUI()
-
-	def initUI(self):
-		self.day1 = Day(self.day, self)
-		
-		#manage layout
-		self.layout = QtGui.QVBoxLayout()
-		self.layout.setSpacing(0)
-		self.layout.addWidget(self.day1)
-		self.setLayout(self.layout)
-		self.layout.setContentsMargins(0,0,0,0)
-
-		self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
-		self.resize(150, 150)
-		self.show()
-
-	def mousePressEvent(self, event):
-		self.__mousePressPos = None
-		self.__mouseMovePos = None
-		if event.button() == QtCore.Qt.LeftButton:
-			self.__mousePressPos = event.globalPos()
-			self.__mouseMovePos = event.globalPos()
-
-	def mouseMoveEvent(self, event):
-		if event.buttons() == QtCore.Qt.LeftButton:
-			#adjust offset from clicked point to origin of widget
-			currPos = self.mapToGlobal(self.pos())
-			globalPos = event.globalPos()
-			diff = globalPos - self.__mouseMovePos
-			newPos = self.mapFromGlobal(currPos + diff)
-			self.move(newPos)
-
-			self.__mouseMovePos = globalPos
-
-	def mouseReleaseEvent(self, event):
-		if event.button() == QtCore.Qt.LeftButton:
-			self.emit(QtCore.SIGNAL('clicked()'))
-		if self.__mousePressPos is not None:
-			moved = event.globalPos() - self.__mousePressPos
-			if moved.manhattanLength() > 3:
-				event.ignore()
-				return
-
-	def close(self):
-		self.hide()
-
 def main():
+	global SIZE
+	DaysDisplayed = [] #keeps reference to newly created days so they actually show on
+	json_data = open('settings.txt')
+	data = json.load(json_data)
+	SIZE = data['SIZE']
+	DaysToDisplay = data['days']
 	app = QtGui.QApplication(sys.argv)
-	ex = SingleDayDisplay(0)
+	for item in DaysToDisplay:
+		new_day = Day(item['day'], item['position'])
+		for event in item['events']:
+			new_event = Event(new_day, str(event['description']), str(event['time']), str(event['priority']))
+			new_day.events.append(new_event)
+			new_day.displayEvents()
+		JSONfunctions.convert_all_events(new_day, DaysOnDisplay, DaysOnDisplayJSON)
+		DaysDisplayed.append(new_day)
+	ex = Day(0)
 	sys.exit(app.exec_())
-
-if __name__ == '__main__':
-	main()
