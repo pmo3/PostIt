@@ -1,13 +1,10 @@
 ######### To Do:
-'''Add context menu to Day display with certain options. Change color,
-add event, etc. Add ability to change size dynamically with 
-context menu options. Same thing with font size.
-
+'''
 Splash screen with quote on open.
 
-Redraw event labels when changing background of Note, 
-they currently disappear until they are clicked on again. '''
+Google Calendar Integration
 
+ '''
 
 
 from PyQt4 import QtGui, QtCore
@@ -18,12 +15,13 @@ import JSONfunctions
 
 #define constants
 SIZE = 150
-DaysOnDisplay = []
-DaysOnDisplayJSON = []
+FONTSIZE = '8pt'
+NotesOnDisplay = []
+NotesOnDisplayJSON = []
 
 KHAKI = QtGui.QColor(240, 230, 140)
 PINK = QtGui.QColor(255, 0, 255)
-GREEN = QtGui.QColor(85, 255, 127)
+GREEN = QtGui.QColor(85, 255, 127) 
 ORANGE = QtGui.QColor(255, 170, 0)
 PURPLE = QtGui.QColor(170, 170, 255)
 RED = QtGui.QColor(255, 0, 0)
@@ -31,11 +29,9 @@ LABELORANGE = QtGui.QColor(255, 140, 0)
 LABELGREEN = QtGui.QColor(124, 252, 0)
 
 
-class Day(QtGui.QWidget):
+class Note(QtGui.QWidget):
 	def __init__(self, date=datetime.date.today(), position=[50, 50], bgColor=[240,230,140]):
-		''' day is int[0,4], where 0 is today,
-		1 is next day, etc'''
-		super(Day, self).__init__()
+		super(Note, self).__init__()
 		self.position = QtCore.QPoint(position[0], position[1])
 		self.date = date
 		self.parent = None
@@ -47,20 +43,21 @@ class Day(QtGui.QWidget):
 		self.initUI()
 
 	def initUI(self):
-		global DaysOnDisplay
+		global NotesOnDisplay
 		# manage widgets
-		self.setMinimumSize(self.WIDTH, self.HEIGHT)
-		self.setStyleSheet('QWidget { font-size: 8pt }')
+		# self.setMinimumSize(SIZE, SIZE)
+		self.setStyleSheet('QWidget { font-size: %s }' % FONTSIZE)
 
 		self.todayLabel = QtGui.QLabel(self)
 		self.dateLabel = QtGui.QLabel(self)
 
 		if type(self.date) == datetime.date:
-			# self.todayLabel.setText('Today')
 			self.dateLabel.setText(self.formatDate(self.date))
+			self.date = self.formatDate(self.date)
 		else:
-			self.todayLabel.setText('')
 			self.dateLabel.setText(self.date)
+
+		self.dateLabel.setStyleSheet('QWidget {font-size:8pt }')
 
 		self.menuLabel = ClickableQLabel(self)
 		self.menuLabel.setPixmap(QtGui.QPixmap('media\menu.png'))
@@ -69,6 +66,9 @@ class Day(QtGui.QWidget):
 		self.deleteLabel.setText('Delete Event')
 		self.addLabel = ClickableQLabel(self)
 		self.addLabel.setText('Add')
+
+		self.deleteLabel.setStyleSheet('QWidget {font-size:8pt }')
+		self.addLabel.setStyleSheet('QWidget {font-size:8pt }')
 
 		#manage signal/slot connections
 		self.connect(self, QtCore.SIGNAL('clicked()'), self.focus)
@@ -114,14 +114,17 @@ class Day(QtGui.QWidget):
 		QtGui.QShortcut(QtGui.QKeySequence('Ctrl+W'), self, self.delete)
 		QtGui.QShortcut(QtGui.QKeySequence('F1'), self, self.changeColor(KHAKI))
 		QtGui.QShortcut(QtGui.QKeySequence('Ctrl+Q'), self, self.exitApp)
+		QtGui.QShortcut(QtGui.QKeySequence('F2'), self, self.changeColor(PINK))
+		QtGui.QShortcut(QtGui.QKeySequence('F3'), self, self.changeColor(GREEN))
+		QtGui.QShortcut(QtGui.QKeySequence('F4'), self, self.changeColor(ORANGE))
+		QtGui.QShortcut(QtGui.QKeySequence('F5'), self, self.changeColor(PURPLE))
+		QtGui.QShortcut(QtGui.QKeySequence('F6'), self, self.changeColor('Custom'))
+		QtGui.QShortcut(QtGui.QKeySequence('Del'), self, self.deleteEvent)
 
-		if type(self.date) == datetime.date:
-			self.date = self.formatDate(self.date)
 
-		DaysOnDisplay.append(self)
-		DaysOnDisplayJSON.append(JSONfunctions.convert_day_to_dict(self))
-		JSONfunctions.save(DaysOnDisplayJSON, SIZE)
-
+		NotesOnDisplay.append(self)
+		NotesOnDisplayJSON.append(JSONfunctions.convert_note_to_dict(self))
+		JSONfunctions.save(NotesOnDisplayJSON, SIZE, FONTSIZE)
 
 	def paintEvent(self, e):
 		qp = QtGui.QPainter()
@@ -131,7 +134,7 @@ class Day(QtGui.QWidget):
 
 	def draw(self, qp, color):
 		qp.setBrush(color)
-		qp.drawRect(0, 0, self.WIDTH, self.HEIGHT)
+		qp.drawRect(0, 0, SIZE, SIZE)
 
 
 	def formatDate(self, date):
@@ -178,59 +181,155 @@ class Day(QtGui.QWidget):
 		self.addEventAction = QtGui.QAction('&Add event', self.menuLabel, triggered=self.addEvent)
 		self.addEventAction.setShortcut('Ctrl+A')
 		
-		self.setPink = QtGui.QAction('&Pink', self.menuLabel, triggered=self.changeColor(PINK))
-		self.setGreen = QtGui.QAction('&Green', self.menuLabel, triggered=self.changeColor(GREEN))
-		self.setOrange = QtGui.QAction('&Orange', self.menuLabel, triggered=self.changeColor(ORANGE))
-		self.setPurple = QtGui.QAction('&Purple', self.menuLabel, triggered=self.changeColor(PURPLE))
-		self.setDefault = QtGui.QAction('&Default', self.menuLabel, triggered=self.changeColor(KHAKI))
-		self.setCustom = QtGui.QAction('&Custom', self.menuLabel, triggered=self.changeColor('Custom'))
+		self.setPink = QtGui.QAction('&Pink', self, triggered=self.changeColor(PINK), checkable=True)
+		self.setGreen = QtGui.QAction('&Green', self.menuLabel, triggered=self.changeColor(GREEN), checkable=True)
+		self.setOrange = QtGui.QAction('&Orange', self.menuLabel, triggered=self.changeColor(ORANGE), checkable=True)
+		self.setPurple = QtGui.QAction('&Purple', self.menuLabel, triggered=self.changeColor(PURPLE), checkable=True)
+		self.setDefault = QtGui.QAction('&Default', self.menuLabel, triggered=self.changeColor(KHAKI), checkable=True)
+		self.setCustom = QtGui.QAction('&Custom', self.menuLabel, triggered=self.changeColor('Custom'), checkable=True)
 		self.setDefault.setShortcut('F1')
+		self.setPink.setShortcut('F2')
+		self.setGreen.setShortcut('F3')
+		self.setOrange.setShortcut('F4')
+		self.setPurple.setShortcut('F5')
+		self.setCustom.setShortcut('F6')
+
+		self.setColorChecked()
+
+		self.fontMenu = QtGui.QMenu('&Change Font Size')
+		self.setFontSmall = QtGui.QAction('&Small', self, triggered=self.changeFontSize('8pt'), checkable=True)
+		self.setFontMed = QtGui.QAction('&Medium', self, triggered=self.changeFontSize('10pt'), checkable=True)
+		self.setFontLarge = QtGui.QAction('&Large', self, triggered=self.changeFontSize('12pt'), checkable=True)
+		self.fontMenu.addAction(self.setFontSmall)
+		self.fontMenu.addAction(self.setFontMed)
+		self.fontMenu.addAction(self.setFontLarge)
+
+		self.setFontChecked()
+
+		self.sizeMenu = QtGui.QMenu('Change Size')
+		self.setSizeSmall = QtGui.QAction('&Small', self, triggered=self.changeSize(150), checkable=True)
+		self.setSizeMed = QtGui.QAction('&Med', self, triggered=self.changeSize(250), checkable=True)
+		self.setSizeLarge = QtGui.QAction('&Large', self, triggered=self.changeSize(320), checkable=True)
+		self.sizeMenu.addAction(self.setSizeSmall)
+		self.sizeMenu.addAction(self.setSizeMed)
+		self.sizeMenu.addAction(self.setSizeLarge)
+
+		self.setSizeChecked()
 
 		self.colorMenu = QtGui.QMenu('&Change Background Color')
+		self.colorMenu.addAction(self.setDefault)
 		self.colorMenu.addAction(self.setPink)
 		self.colorMenu.addAction(self.setGreen)
 		self.colorMenu.addAction(self.setOrange)
 		self.colorMenu.addAction(self.setPurple)
-		self.colorMenu.addAction(self.setDefault)
 		self.colorMenu.addAction(self.setCustom)
-		actionsList = [self.newNoteAction, self.addEventAction, self.colorMenu, self.closeAction, self.exitAction]
-		return actionsList
+
+		#set contextmenu policy for Note
+		self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+		self.customContextMenuRequested.connect(self.setupMainContextMenu)	
+
+	def setupMainContextMenu(self):
+		mainMenu = QtGui.QMenu()
+		mainMenu.addAction(self.newNoteAction)
+		mainMenu.addAction(self.addEventAction)
+		mainMenu.addMenu(self.colorMenu)
+		mainMenu.addAction(self.closeAction)
+		mainMenu.exec_(QtGui.QCursor.pos())	
 
 	def setupContextMenu(self):
 		menu = QtGui.QMenu()
 		point = self.menuLabel.rect().topLeft()
 		
-		# add actions
-		for item in self.createActions():
-			if type(item) == QtGui.QAction:
-				menu.addAction(item)
-			elif type(item) == QtGui.QMenu:
-				menu.addMenu(item)
+		menu.addAction(self.newNoteAction)
+		menu.addAction(self.addEventAction)
+		menu.addMenu(self.colorMenu)
+		menu.addMenu(self.fontMenu)
+		menu.addMenu(self.sizeMenu)
+		menu.addAction(self.closeAction)
+		menu.addAction(self.exitAction)
 		menu.exec_(self.menuLabel.mapToGlobal(point))
 
 	def openNewNote(self):
-		self.new = Day(datetime.date.today())
+		self.new = Note(datetime.date.today())
 		self.new.resize(self.WIDTH, self.HEIGHT)
 		self.new.show()
 
 
 	def changeColor(self, col):
-		# def callback():
-		# 	col = color
-		# 	print col
 		def callback():
 			color = col
 			if color == "Custom":
 				color = QtGui.QColorDialog.getColor()
 			if color.isValid():
+				for event in self.events:
+					if self.background == event.priority:
+						event.priority = color
+						event.eventLabel.setStyleSheet("QWidget { background-color: % s }" % color.name())				
 				self.background = color
 				self.repaint()
-				JSONfunctions.update_background(self, color, DaysOnDisplay, DaysOnDisplayJSON)
-				JSONfunctions.save(DaysOnDisplayJSON, SIZE)
-				for event in self.events:
-					event.eventLabel.setStyleSheet("QWidget { background-color: % s }" % color.name())
+				JSONfunctions.update_background(self, color, NotesOnDisplay, NotesOnDisplayJSON)
+				JSONfunctions.convert_all_events(self, NotesOnDisplay, NotesOnDisplayJSON)
+				JSONfunctions.save(NotesOnDisplayJSON, SIZE, FONTSIZE)
+				self.setColorChecked()
 		return callback
 
+	def setColorChecked(self):
+		actions = [self.setPink, self.setGreen, self.setOrange, self.setPurple, self.setDefault, self.setCustom]
+		for action in actions:
+			action.setChecked(False)
+		if self.background == PINK:
+			self.setPink.setChecked(True)
+		elif self.background == GREEN:
+			self.setGreen.setChecked(True)
+		elif self.background == ORANGE:
+			self.setOrange.setChecked(True)
+		elif self.background == PURPLE:
+			self.setPurple.setChecked(True)
+		elif self.background == KHAKI:
+			self.setDefault.setChecked(True)
+		else:
+			self.setCustom.setChecked(True)
+
+	def changeSize(self, size):
+		def callback():
+			global SIZE
+			SIZE = size
+			self.resize(SIZE, SIZE)
+			self.repaint()
+			self.setSizeChecked()
+		return callback
+
+	def setSizeChecked(self):
+		actions = [self.setSizeSmall, self.setSizeMed, self.setSizeLarge]
+		for action in actions:
+			action.setChecked(False)
+		if SIZE == 150:
+			self.setSizeSmall.setChecked(True)
+		elif SIZE == 250:
+			self.setSizeMed.setChecked(True)
+		elif SIZE == 320:
+			self.setSizeLarge.setChecked(True)
+
+
+	def changeFontSize(self, size):
+		def callback():
+			global FONTSIZE
+			FONTSIZE = size
+			self.setStyleSheet('QWidget {font-size: %s }' % FONTSIZE)
+			JSONfunctions.save(NotesOnDisplayJSON, SIZE, FONTSIZE)
+			self.setFontChecked()
+		return callback
+
+	def setFontChecked(self):
+		actions = [self.setFontLarge, self.setFontMed, self.setFontSmall]
+		for action in actions:
+			action.setChecked(False)
+		if FONTSIZE == '8pt':
+			self.setFontSmall.setChecked(True)
+		elif FONTSIZE == '10pt':
+			self.setFontMed.setChecked(True)
+		elif FONTSIZE == '12pt':
+			self.setFontLarge.setChecked(True)
 
 	#emit mouse event signals
 	def mouseReleaseEvent(self, event):
@@ -239,8 +338,8 @@ class Day(QtGui.QWidget):
 		if self.__mousePressPos is not None:
 			moved = event.globalPos() - self.__mousePressPos
 			self.position = QtGui.QCursor.pos()
-			JSONfunctions.update_pos(self, self.position, DaysOnDisplay, DaysOnDisplayJSON)
-			JSONfunctions.save(DaysOnDisplayJSON, SIZE)
+			JSONfunctions.update_pos(self, self.position, NotesOnDisplay, NotesOnDisplayJSON)
+			JSONfunctions.save(NotesOnDisplayJSON, SIZE, FONTSIZE)
 			if moved.manhattanLength() > 3:
 				event.ignore()
 				return
@@ -269,25 +368,24 @@ class Day(QtGui.QWidget):
 			self.__mouseMovePos = globalPos
 
 	def delete(self):
-		if len(DaysOnDisplay) == 1:
-			index = DaysOnDisplay.index(self)
-			del DaysOnDisplayJSON[index]
-			del DaysOnDisplay[index]
+		if len(NotesOnDisplay) == 1:
+			index = NotesOnDisplay.index(self)
+			del NotesOnDisplayJSON[index]
+			del NotesOnDisplay[index]
 			self.hide()
 			self.deleteLater()
-			JSONfunctions.save(DaysOnDisplayJSON, SIZE)
+			JSONfunctions.save(NotesOnDisplayJSON, SIZE, FONTSIZE)
 			self.exitApp()
 		else:
-			index = DaysOnDisplay.index(self)
-			del DaysOnDisplayJSON[index]
-			del DaysOnDisplay[index]
+			index = NotesOnDisplay.index(self)
+			del NotesOnDisplayJSON[index]
+			del NotesOnDisplay[index]
 			self.hide()
 			self.deleteLater()
-			JSONfunctions.save(DaysOnDisplayJSON, SIZE)
-			
+			JSONfunctions.save(NotesOnDisplayJSON, SIZE, FONTSIZE)			
 
 	def exitApp(self):
-		JSONfunctions.save(DaysOnDisplayJSON, SIZE)
+		JSONfunctions.save(NotesOnDisplayJSON, SIZE, FONTSIZE)		
 		sys.exit()
 
 	def __repr__(self):
@@ -314,25 +412,23 @@ class ClickableQLabel(QtGui.QLabel):
 		self.emit(QtCore.SIGNAL('focusOut()'))
 
 class Event(QtGui.QWidget):
-
-#class-wide dictionary for priority:color pairs
-	ColorDictionary = {'High':RED, "Medium":LABELORANGE,
-				'Low':LABELGREEN, 'Choose a Priority':KHAKI}
-
-	def __init__(self, day, description, time=None, priority=None):
+	def __init__(self, note, description, priority=None):
 		super(Event, self).__init__()
-		self.day = day
-		self.time = time
+		self.note = note
 		self.description = description
+		ColorDictionary = {'High':RED, "Medium":LABELORANGE,
+				'Low':LABELGREEN, 'Choose a Priority':self.note.background}
+
 		if type(priority) == QtGui.QColor:
 			self.priority = priority
 		else:
-			self.priority = Event.ColorDictionary[priority]
-		self.col = self.day.background
+			self.priority = ColorDictionary[priority]
+		self.col = self.note.background
 		self.selected = False
 		self.initUI()
 
 	def initUI(self):
+		self.setStyleSheet('QWidget { font-size: %s }' % FONTSIZE)
 		self.initLabelUI(self.description)
 
 		self.setPriority(self.priority)
@@ -350,7 +446,7 @@ class Event(QtGui.QWidget):
 		return self.eventLabel
 
 	def initLabelUI(self, text):
-		self.eventLabel = ClickableQLabel(self.day)
+		self.eventLabel = ClickableQLabel(self.note)
 		self.eventLabel.setText(text)
 		self.eventLabel.setToolTip('Double click to edit')
 		self.eventLabel.setWordWrap(True)
@@ -366,35 +462,38 @@ class Event(QtGui.QWidget):
 	def setPriority(self, color):
 		if color == 'Custom':
 			self.priority = QtGui.QColorDialog.getColor()
-		elif color == 'None':
-			self.priority = self.day.background
+		if color == 'None' or color == 'Choose a Priority':
+			self.priority = self.note.background
 		else:
 			self.priority = color
 		if self.priority.isValid():	
 			self.eventLabel.setStyleSheet("QWidget { background-color: % s }" % self.priority.name())
-			JSONfunctions.convert_all_events(self.day, DaysOnDisplay, DaysOnDisplayJSON)
-			JSONfunctions.save(DaysOnDisplayJSON, SIZE)
+			JSONfunctions.convert_all_events(self.note, NotesOnDisplay, NotesOnDisplayJSON)
+			JSONfunctions.save(NotesOnDisplayJSON, SIZE, FONTSIZE)
 
 	def beginEditAct(self):
-		index = self.day.eventLayout.indexOf(self.eventLabel)
+		index = self.note.eventLayout.indexOf(self.eventLabel)
 		self.eventLabel.deleteLater()
 		self.eventLabel = QtGui.QLineEdit(self.eventLabel.text())
 		self.eventLabel.returnPressed.connect(self.finishEditAct)
-		self.day.events[index] = self
-		self.day.displayEvents()
+		self.note.events[index] = self
+		self.note.displayEvents()
 
 	def finishEditAct(self):
-		index = self.day.eventLayout.indexOf(self.eventLabel)
+		index = self.note.eventLayout.indexOf(self.eventLabel)
 		text = self.eventLabel.text()
+		if text == '':
+			self.delete()
+			return
 		self.eventLabel.deleteLater()
 		self.initLabelUI(text)
-		self.setPriority()
-		self.day.events[index] = self
+		self.description = text
+		self.setPriority(self.priority)
+		self.note.events[index] = self
 		self.createActions()
-		self.day.displayEvents()
-		JSONfunctions.convert_all_events(self.day, DaysOnDisplay, DaysOnDisplayJSON)
-		JSONfunctions.save(DaysOnDisplayJSON, SIZE)
-
+		self.note.displayEvents()
+		JSONfunctions.convert_all_events(self.note, NotesOnDisplay, NotesOnDisplayJSON)
+		JSONfunctions.save(NotesOnDisplayJSON, SIZE, FONTSIZE)
 
 	def createActions(self):
 		self.eventLabel.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
@@ -403,7 +502,7 @@ class Event(QtGui.QWidget):
 		self.setPriorityMediumAct = QtGui.QAction('&Medium', self.eventLabel, triggered=self.resetPriority(LABELORANGE))
 		self.setPriorityLowAct = QtGui.QAction('&Low', self.eventLabel, triggered=self.resetPriority(LABELGREEN))
 		self.setPriorityCustomAct = QtGui.QAction('&Custom', self.eventLabel, triggered=self.resetPriority('Custom'))
-		self.setPriorityNoneAct = QtGui.QAction('&None', self.eventLabel, triggered=self.resetPriority(self.day.background))
+		self.setPriorityNoneAct = QtGui.QAction('&None', self.eventLabel, triggered=self.resetPriority(self.note.background))
 		self.deleteAction = QtGui.QAction('&Delete Event', self.eventLabel, triggered=self.delete)
 
 	def setupContextMenu(self, point):
@@ -428,30 +527,29 @@ class Event(QtGui.QWidget):
 
 	def delete(self):
 		self.eventLabel.deleteLater()
-		self.day.events.remove(self)
-		self.day.displayEvents()
-		JSONfunctions.convert_all_events(self.day, DaysOnDisplay, DaysOnDisplayJSON)
-		JSONfunctions.save(DaysOnDisplayJSON, SIZE)
-
+		self.note.events.remove(self)
+		self.note.displayEvents()
+		JSONfunctions.convert_all_events(self.note, NotesOnDisplay, NotesOnDisplayJSON)
+		JSONfunctions.save(NotesOnDisplayJSON, SIZE, FONTSIZE)
 	def focus(self):
 		self.eventLabel.setFocus(True)
 
 	def outlineLabel(self):
-			self.eventLabel.setStyleSheet("QWidget { border-style: dotted; border-width: 2px; background-color: %s }" % self.col.name())
+			self.eventLabel.setStyleSheet("QWidget { border-style: dotted; border-width: 2px; background-color: %s }" % self.priority.name())
 			self.selected = True
-			self.day.selected = self
+			self.note.selected = self
 
 
 	def deleteOutline(self):
 		self.eventLabel.setStyleSheet("QWidget { border-width: 0px }")
 		self.selected = False
-		self.day.selected = None
+		self.note.selected = None
 		self.setPriority(self.priority)
 
 class AddMenuPopUp(QtGui.QDialog):
-	def __init__(self, day):
+	def __init__(self, note):
 		QtGui.QWidget.__init__(self)
-		self.day = day
+		self.note = note
 		self.initUI()
 
 	def initUI(self):
@@ -498,37 +596,34 @@ class AddMenuPopUp(QtGui.QDialog):
 		if description == '':
 			self.warning = QtGui.QMessageBox.information(self, 'Warning', 'You must enter a description', QtGui.QMessageBox.Close)
 			return
-		else:
-			time = None
-		
 		priority = str(self.prioritySelector.currentText())
-		newEvent = Event(self.day, description, time, priority)
-		self.day.events.append(newEvent)
-		self.day.displayEvents()
-		print priority
-		JSONfunctions.convert_all_events(self.day, DaysOnDisplay, DaysOnDisplayJSON)
-		JSONfunctions.save(DaysOnDisplayJSON, SIZE)	
+		newEvent = Event(self.note, description, priority)
+		self.note.events.append(newEvent)
+		self.note.displayEvents()
+		JSONfunctions.convert_all_events(self.note, NotesOnDisplay, NotesOnDisplayJSON)
+		JSONfunctions.save(NotesOnDisplayJSON, SIZE, FONTSIZE)	
 		self.accept()
 
 
 def main():
-	global SIZE
-	DaysDisplayed = [] #keeps reference to newly created days so they actually show on
+	global SIZE, FONTSIZE
+	NotesDisplayed = [] #keeps reference to newly created notes so they actually show on
 	json_data = open('settings.txt')
 	data = json.load(json_data)
 	SIZE = data['SIZE']
-	DaysToDisplay = data['days']
+	FONTSIZE = data['FONTSIZE']
+	NotesToDisplay = data['days']
 	app = QtGui.QApplication(sys.argv)
-	if len(DaysToDisplay) == 0:
-		first = Day()
-	for item in DaysToDisplay:
-		new_day = Day(item['day'], item['position'], item['background'])
+	if len(NotesToDisplay) == 0:
+		first = Note()
+	for item in NotesToDisplay:
+		new_day = Note(item['day'], item['position'], item['background'])
 		for event in item['events']:
-			new_event = Event(new_day, str(event['description']), str(event['time']), JSONfunctions.convert_RGBList_to_Color(event['priority']))
+			new_event = Event(new_day, str(event['description']), JSONfunctions.convert_RGBList_to_Color(event['priority']))
 			new_day.events.append(new_event)
 			new_day.displayEvents()
-		JSONfunctions.convert_all_events(new_day, DaysOnDisplay, DaysOnDisplayJSON)
-		DaysDisplayed.append(new_day)
+		JSONfunctions.convert_all_events(new_day, NotesOnDisplay, NotesOnDisplayJSON)
+		NotesDisplayed.append(new_day)
 	sys.exit(app.exec_())
 
 if __name__ == '__main__':

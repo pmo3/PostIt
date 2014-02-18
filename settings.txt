@@ -1,4 +1,36 @@
 {
+    "FONTSIZE": "8pt", 
     "SIZE": 250, 
     "days": [
-       ]}
+        {
+            "background": [
+                255, 
+                0, 
+                255
+            ], 
+            "day": "2/17", 
+            "events": [
+                {
+                    "description": "Google Calendar integration", 
+                    "priority": [
+                        255, 
+                        0, 
+                        255
+                    ]
+                }, 
+                {
+                    "description": "completely get rid of time references", 
+                    "priority": [
+                        255, 
+                        0, 
+                        255
+                    ]
+                }
+            ], 
+            "position": [
+                606, 
+                625
+            ]
+        }
+    ]
+}
