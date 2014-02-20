@@ -1,7 +1,5 @@
 ######### To Do:
 '''
-Splash screen with quote on open.
-
 Google Calendar Integration
 
  '''
@@ -12,6 +10,10 @@ import datetime
 import sys
 import json
 import JSONfunctions
+import startup
+import os
+import time
+
 
 #define constants
 SIZE = 150
@@ -45,10 +47,9 @@ class Note(QtGui.QWidget):
 	def initUI(self):
 		global NotesOnDisplay
 		# manage widgets
-		# self.setMinimumSize(SIZE, SIZE)
 		self.setStyleSheet('QWidget { font-size: %s }' % FONTSIZE)
 
-		self.todayLabel = QtGui.QLabel(self)
+		# self.todayLabel = QtGui.QLabel(self)
 		self.dateLabel = QtGui.QLabel(self)
 
 		if type(self.date) == datetime.date:
@@ -58,9 +59,6 @@ class Note(QtGui.QWidget):
 			self.dateLabel.setText(self.date)
 
 		self.dateLabel.setStyleSheet('QWidget {font-size:8pt }')
-
-		self.menuLabel = ClickableQLabel(self)
-		self.menuLabel.setPixmap(QtGui.QPixmap('media\menu.png'))
 
 		self.deleteLabel = ClickableQLabel(self)
 		self.deleteLabel.setText('Delete Event')
@@ -73,15 +71,11 @@ class Note(QtGui.QWidget):
 		#manage signal/slot connections
 		self.connect(self, QtCore.SIGNAL('clicked()'), self.focus)
 		self.connect(self, QtCore.SIGNAL('doubleClicked()'), self.addEvent)
-		self.connect(self.menuLabel, QtCore.SIGNAL('clicked()'), self.setupContextMenu)
 		self.connect(self.deleteLabel, QtCore.SIGNAL('clicked()'), self.deleteEvent)
 		self.connect(self.addLabel, QtCore.SIGNAL('clicked()'), self.addEvent)
 
 		# manage layouts
 		self.dateLayout = QtGui.QHBoxLayout()
-		self.dateLayout.addWidget(self.todayLabel)
-		self.dateLayout.addStretch(1)	
-		self.dateLayout.addWidget(self.menuLabel)
 		self.dateLayout.addStretch(1)
 		self.dateLayout.addWidget(self.dateLabel)
 
@@ -167,39 +161,38 @@ class Note(QtGui.QWidget):
 		if self.selected == None:
 			return
 		self.selected.delete()
+		self.selected = None
 
 	def focus(self):
 		self.setFocus(True)
 
 	def createActions(self):
-		self.exitAction = QtGui.QAction('&Exit', self.menuLabel, triggered=self.exitApp)
-		self.exitAction.setShortcut('Ctrl+Q')
-		self.closeAction = QtGui.QAction('&Delete this note', self.menuLabel, triggered=self.delete)
-		self.closeAction.setShortcut('Ctrl+W')
-		self.newNoteAction = QtGui.QAction('&New note', self.menuLabel, triggered=self.openNewNote)
-		self.newNoteAction.setShortcut('Ctrl+N')
-		self.addEventAction = QtGui.QAction('&Add event', self.menuLabel, triggered=self.addEvent)
-		self.addEventAction.setShortcut('Ctrl+A')
+		self.exitAction = QtGui.QAction('Exit\tCtrl+Q', self, triggered=self.exitApp)
+		self.closeAction = QtGui.QAction('Delete this note\tCtrl+W', self, triggered=self.delete)
+		self.newNoteAction = QtGui.QAction('New note\tCtrl+N', self, triggered=self.openNewNote)
+		self.addEventAction = QtGui.QAction('Add event\tCtrl+A', self, triggered=self.addEvent)
 		
-		self.setPink = QtGui.QAction('&Pink', self, triggered=self.changeColor(PINK), checkable=True)
-		self.setGreen = QtGui.QAction('&Green', self.menuLabel, triggered=self.changeColor(GREEN), checkable=True)
-		self.setOrange = QtGui.QAction('&Orange', self.menuLabel, triggered=self.changeColor(ORANGE), checkable=True)
-		self.setPurple = QtGui.QAction('&Purple', self.menuLabel, triggered=self.changeColor(PURPLE), checkable=True)
-		self.setDefault = QtGui.QAction('&Default', self.menuLabel, triggered=self.changeColor(KHAKI), checkable=True)
-		self.setCustom = QtGui.QAction('&Custom', self.menuLabel, triggered=self.changeColor('Custom'), checkable=True)
-		self.setDefault.setShortcut('F1')
-		self.setPink.setShortcut('F2')
-		self.setGreen.setShortcut('F3')
-		self.setOrange.setShortcut('F4')
-		self.setPurple.setShortcut('F5')
-		self.setCustom.setShortcut('F6')
+		self.setPink = QtGui.QAction('Pink\tF2', self, triggered=self.changeColor(PINK), checkable=True)
+		self.setGreen = QtGui.QAction('Green\tF3', self, triggered=self.changeColor(GREEN), checkable=True)
+		self.setOrange = QtGui.QAction('Orange\tF4', self, triggered=self.changeColor(ORANGE), checkable=True)
+		self.setPurple = QtGui.QAction('Purple\tF5', self, triggered=self.changeColor(PURPLE), checkable=True)
+		self.setDefault = QtGui.QAction('Default\tF1', self, triggered=self.changeColor(KHAKI), checkable=True)
+		self.setCustom = QtGui.QAction('Custom\tF6', self, triggered=self.changeColor('Custom'), checkable=True)
 
+		self.colorMenu = QtGui.QMenu('Change Background Color')
+		self.colorMenu.addAction(self.setDefault)
+		self.colorMenu.addAction(self.setPink)
+		self.colorMenu.addAction(self.setGreen)
+		self.colorMenu.addAction(self.setOrange)
+		self.colorMenu.addAction(self.setPurple)
+		self.colorMenu.addAction(self.setCustom)
+		
 		self.setColorChecked()
 
-		self.fontMenu = QtGui.QMenu('&Change Font Size')
-		self.setFontSmall = QtGui.QAction('&Small', self, triggered=self.changeFontSize('8pt'), checkable=True)
-		self.setFontMed = QtGui.QAction('&Medium', self, triggered=self.changeFontSize('10pt'), checkable=True)
-		self.setFontLarge = QtGui.QAction('&Large', self, triggered=self.changeFontSize('12pt'), checkable=True)
+		self.fontMenu = QtGui.QMenu('Change Font Size')
+		self.setFontSmall = QtGui.QAction('Small', self, triggered=self.changeFontSize('8pt'), checkable=True)
+		self.setFontMed = QtGui.QAction('Medium', self, triggered=self.changeFontSize('10pt'), checkable=True)
+		self.setFontLarge = QtGui.QAction('Large', self, triggered=self.changeFontSize('12pt'), checkable=True)
 		self.fontMenu.addAction(self.setFontSmall)
 		self.fontMenu.addAction(self.setFontMed)
 		self.fontMenu.addAction(self.setFontLarge)
@@ -207,22 +200,15 @@ class Note(QtGui.QWidget):
 		self.setFontChecked()
 
 		self.sizeMenu = QtGui.QMenu('Change Size')
-		self.setSizeSmall = QtGui.QAction('&Small', self, triggered=self.changeSize(150), checkable=True)
-		self.setSizeMed = QtGui.QAction('&Med', self, triggered=self.changeSize(250), checkable=True)
-		self.setSizeLarge = QtGui.QAction('&Large', self, triggered=self.changeSize(320), checkable=True)
+		self.setSizeSmall = QtGui.QAction('Small', self, triggered=self.changeSize(150), checkable=True)
+		self.setSizeMed = QtGui.QAction('Med', self, triggered=self.changeSize(250), checkable=True)
+		self.setSizeLarge = QtGui.QAction('Large', self, triggered=self.changeSize(320), checkable=True)
 		self.sizeMenu.addAction(self.setSizeSmall)
 		self.sizeMenu.addAction(self.setSizeMed)
 		self.sizeMenu.addAction(self.setSizeLarge)
 
 		self.setSizeChecked()
 
-		self.colorMenu = QtGui.QMenu('&Change Background Color')
-		self.colorMenu.addAction(self.setDefault)
-		self.colorMenu.addAction(self.setPink)
-		self.colorMenu.addAction(self.setGreen)
-		self.colorMenu.addAction(self.setOrange)
-		self.colorMenu.addAction(self.setPurple)
-		self.colorMenu.addAction(self.setCustom)
 
 		#set contextmenu policy for Note
 		self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
@@ -233,21 +219,12 @@ class Note(QtGui.QWidget):
 		mainMenu.addAction(self.newNoteAction)
 		mainMenu.addAction(self.addEventAction)
 		mainMenu.addMenu(self.colorMenu)
+		mainMenu.addMenu(self.fontMenu)
+		mainMenu.addMenu(self.sizeMenu)
 		mainMenu.addAction(self.closeAction)
+		mainMenu.addAction(self.exitAction)
 		mainMenu.exec_(QtGui.QCursor.pos())	
 
-	def setupContextMenu(self):
-		menu = QtGui.QMenu()
-		point = self.menuLabel.rect().topLeft()
-		
-		menu.addAction(self.newNoteAction)
-		menu.addAction(self.addEventAction)
-		menu.addMenu(self.colorMenu)
-		menu.addMenu(self.fontMenu)
-		menu.addMenu(self.sizeMenu)
-		menu.addAction(self.closeAction)
-		menu.addAction(self.exitAction)
-		menu.exec_(self.menuLabel.mapToGlobal(point))
 
 	def openNewNote(self):
 		self.new = Note(datetime.date.today())
@@ -338,7 +315,7 @@ class Note(QtGui.QWidget):
 		if self.__mousePressPos is not None:
 			moved = event.globalPos() - self.__mousePressPos
 			self.position = QtGui.QCursor.pos()
-			JSONfunctions.update_pos(self, self.position, NotesOnDisplay, NotesOnDisplayJSON)
+			JSONfunctions.update_pos(self, self.rect().topLeft(), NotesOnDisplay, NotesOnDisplayJSON)
 			JSONfunctions.save(NotesOnDisplayJSON, SIZE, FONTSIZE)
 			if moved.manhattanLength() > 3:
 				event.ignore()
@@ -462,7 +439,7 @@ class Event(QtGui.QWidget):
 	def setPriority(self, color):
 		if color == 'Custom':
 			self.priority = QtGui.QColorDialog.getColor()
-		if color == 'None' or color == 'Choose a Priority':
+		elif color == 'None' or color == 'Choose a Priority':
 			self.priority = self.note.background
 		else:
 			self.priority = color
@@ -604,27 +581,65 @@ class AddMenuPopUp(QtGui.QDialog):
 		JSONfunctions.save(NotesOnDisplayJSON, SIZE, FONTSIZE)	
 		self.accept()
 
+class QuoteScreen(QtGui.QDialog):
+	def __init__(self):
+		super(QuoteScreen, self).__init__()
+		self.backgrounds = []
+		for file in os.listdir("media/splash"):
+			self.backgrounds.append(file)
 
-def main():
-	global SIZE, FONTSIZE
-	NotesDisplayed = [] #keeps reference to newly created notes so they actually show on
-	json_data = open('settings.txt')
-	data = json.load(json_data)
-	SIZE = data['SIZE']
-	FONTSIZE = data['FONTSIZE']
-	NotesToDisplay = data['days']
-	app = QtGui.QApplication(sys.argv)
-	if len(NotesToDisplay) == 0:
-		first = Note()
-	for item in NotesToDisplay:
-		new_day = Note(item['day'], item['position'], item['background'])
-		for event in item['events']:
-			new_event = Event(new_day, str(event['description']), JSONfunctions.convert_RGBList_to_Color(event['priority']))
-			new_day.events.append(new_event)
-			new_day.displayEvents()
-		JSONfunctions.convert_all_events(new_day, NotesOnDisplay, NotesOnDisplayJSON)
-		NotesDisplayed.append(new_day)
-	sys.exit(app.exec_())
+		self.initUI()
 
-if __name__ == '__main__':
-	main()
+	def initUI(self):
+		from random import choice
+		self.label = ClickableQLabel(self)
+		self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
+		self.resize(640, 480)
+		self.label.setWordWrap(True)
+		self.setStyleSheet('QDialog {background-image: url("media/splash/%s"); background-repeat: no-repeat}' % choice(self.backgrounds))
+		self.label.setStyleSheet('ClickableQLabel {font-size: 20pt; color:white}')
+		self.label.setText(startup.findQuote()[0])
+
+		self.labelLayout = QtGui.QHBoxLayout()
+		self.labelLayout.addStretch(1)
+		self.labelLayout.addWidget(self.label)
+		self.labelLayout.addStretch(1)
+
+		self.author = ClickableQLabel(self)
+		self.author.setStyleSheet('ClickableQLabel {font-size: 18pt; color:white}')
+		self.author.setText("- " + startup.findQuote()[1])
+
+		#layout management
+		self.authorLayout = QtGui.QHBoxLayout()
+		self.authorLayout.addStretch(1)
+		self.authorLayout.addWidget(self.author)
+
+		self.layout = QtGui.QVBoxLayout()
+		self.layout.addStretch(1)
+		self.layout.addLayout(self.labelLayout)
+		self.layout.addStretch(1)
+		self.layout.addLayout(self.authorLayout)
+		self.layout.addStretch(1)
+		self.setLayout(self.layout)
+
+		self.connect(self, QtCore.SIGNAL('clicked()'), self.closeSplash)
+
+		self.center()
+		self.show()
+
+	def center(self):
+		'''center widget on screen'''
+		self.screen = QtGui.QDesktopWidget().screenGeometry()
+		size = self.geometry()
+		self.move((self.screen.width() - size.width())/2, (self.screen.height() - size.height())/2)
+
+	def closeSplash(self):
+		self.deleteLater()
+		for item in NotesOnDisplay:
+			item.show()
+
+	def mouseReleaseEvent(self, event):
+		if event.button() == QtCore.Qt.LeftButton:
+			self.emit(QtCore.SIGNAL('clicked()'))
+
+

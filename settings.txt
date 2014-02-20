@@ -4,32 +4,53 @@
     "days": [
         {
             "background": [
-                255, 
-                0, 
-                255
+                240, 
+                230, 
+                140
             ], 
-            "day": "2/17", 
+            "day": "2/20", 
             "events": [
                 {
-                    "description": "Google Calendar integration", 
+                    "description": "pppppp", 
                     "priority": [
                         255, 
-                        0, 
+                        85, 
                         255
                     ]
                 }, 
                 {
-                    "description": "completely get rid of time references", 
+                    "description": "feafeafeafea", 
                     "priority": [
-                        255, 
-                        0, 
+                        240, 
+                        230, 
+                        140
+                    ]
+                }, 
+                {
+                    "description": "tttttttttttttttt", 
+                    "priority": [
+                        85, 
+                        85, 
                         255
                     ]
                 }
             ], 
             "position": [
-                606, 
-                625
+                447, 
+                738
+            ]
+        }, 
+        {
+            "background": [
+                240, 
+                230, 
+                140
+            ], 
+            "day": "2/20", 
+            "events": [], 
+            "position": [
+                297, 
+                226
             ]
         }
     ]

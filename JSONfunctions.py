@@ -2,7 +2,7 @@
 '''JSON-related functions for PostIt App'''
 
 #####
-import GUIClasses
+# import GUIClasses
 import json
 
 def convert_note_to_dict(obj):
